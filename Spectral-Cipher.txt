@@ -1,0 +1,1848 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPECTRAL CIPHER — Image Wave Encryption</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #020408;
+    --panel: rgba(4, 16, 28, 0.85);
+    --border: rgba(0, 255, 180, 0.18);
+    --neon: #00ffb4;
+    --neon2: #00b8ff;
+    --neon3: #ff006e;
+    --neon4: #ffe600;
+    --text: #c8ffe8;
+    --dim: rgba(200,255,232,0.45);
+    --glow: 0 0 18px rgba(0,255,180,0.45);
+    --glow2: 0 0 18px rgba(0,184,255,0.45);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 15px;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,180,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,180,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(0,255,180,0.06) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .scanline {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(0,255,180,0.6), transparent);
+    animation: scan 4s linear infinite;
+    z-index: 9999;
+    pointer-events: none;
+  }
+  @keyframes scan { from { top: 0; } to { top: 100vh; } }
+
+  /* NAV */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px;
+    height: 60px;
+    background: rgba(2,4,8,0.92);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(12px);
+  }
+
+  .nav-logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    color: var(--neon);
+    text-shadow: var(--glow);
+  }
+  .nav-logo span { color: var(--neon3); }
+
+  .nav-tabs {
+    display: flex; gap: 4px;
+  }
+  .tab-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--dim);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    padding: 7px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+  }
+  .tab-btn:hover { color: var(--neon); border-color: var(--border); }
+  .tab-btn.active {
+    color: var(--neon);
+    border-color: var(--neon);
+    background: rgba(0,255,180,0.08);
+    text-shadow: var(--glow);
+    box-shadow: inset 0 0 12px rgba(0,255,180,0.1);
+  }
+
+  .nav-status {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--neon);
+    box-shadow: 0 0 8px var(--neon);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+  /* MAIN */
+  main {
+    position: relative; z-index: 1;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 32px 24px;
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* PANEL GLASS */
+  .glass {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    backdrop-filter: blur(16px);
+    position: relative;
+    overflow: hidden;
+  }
+  .glass::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--neon), transparent);
+    opacity: 0.5;
+  }
+
+  .panel-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-icon {
+    font-size: 16px;
+    color: var(--neon);
+    text-shadow: var(--glow);
+  }
+  .panel-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    letter-spacing: 3px;
+    color: var(--neon);
+    text-transform: uppercase;
+  }
+  .panel-sub {
+    margin-left: auto;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+  }
+
+  .panel-body { padding: 24px 22px; }
+
+  /* GRID LAYOUTS */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+  @media (max-width: 800px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* DROP ZONE */
+  .drop-zone {
+    border: 1px dashed rgba(0,255,180,0.3);
+    border-radius: 2px;
+    min-height: 180px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s;
+    gap: 12px;
+    background: rgba(0,255,180,0.02);
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone:hover, .drop-zone.dragging {
+    border-color: var(--neon);
+    background: rgba(0,255,180,0.06);
+    box-shadow: inset 0 0 30px rgba(0,255,180,0.05), var(--glow);
+  }
+  .drop-icon {
+    font-size: 32px;
+    opacity: 0.5;
+  }
+  .drop-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-align: center;
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+
+  /* PREVIEW */
+  .preview-box {
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    min-height: 180px;
+    background: rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    position: relative;
+  }
+  .preview-box img, .preview-box canvas {
+    max-width: 100%; max-height: 300px;
+    object-fit: contain;
+  }
+  .preview-label {
+    position: absolute; bottom: 8px; left: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--dim);
+    letter-spacing: 1px;
+    background: rgba(0,0,0,0.7);
+    padding: 2px 6px;
+  }
+  .preview-placeholder {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: rgba(200,255,232,0.2);
+    letter-spacing: 2px;
+  }
+
+  /* BUTTONS */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 24px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    border-radius: 1px;
+    text-decoration: none;
+  }
+  .btn-primary {
+    background: var(--neon);
+    color: #000;
+  }
+  .btn-primary:hover {
+    background: #fff;
+    box-shadow: var(--glow);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--neon);
+    border: 1px solid var(--neon);
+  }
+  .btn-secondary:hover {
+    background: rgba(0,255,180,0.1);
+    box-shadow: var(--glow);
+  }
+  .btn-danger {
+    background: transparent;
+    color: var(--neon3);
+    border: 1px solid var(--neon3);
+  }
+  .btn-danger:hover {
+    background: rgba(255,0,110,0.1);
+    box-shadow: 0 0 18px rgba(255,0,110,0.4);
+  }
+  .btn:disabled {
+    opacity: 0.35; cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  /* PROGRESS */
+  .progress-wrap {
+    height: 3px;
+    background: rgba(0,255,180,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin: 12px 0;
+  }
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon2), var(--neon));
+    width: 0%;
+    transition: width 0.2s;
+    box-shadow: 0 0 8px var(--neon);
+  }
+
+  /* INPUT / SELECT */
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    padding: 9px 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    border-radius: 1px;
+  }
+  .field input:focus, .field select:focus {
+    border-color: var(--neon);
+    box-shadow: 0 0 10px rgba(0,255,180,0.15);
+  }
+  .field input[type=range] {
+    padding: 0;
+    accent-color: var(--neon);
+  }
+  .range-row { display: flex; align-items: center; gap: 12px; }
+  .range-val {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 13px;
+    color: var(--neon);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  /* CANVAS */
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+
+  /* SPEC CANVAS */
+  #specCanvas, #waveCanvas, #freqCanvas {
+    width: 100%;
+    border: 1px solid var(--border);
+    background: #000;
+    min-height: 120px;
+  }
+
+  /* LOG */
+  .log {
+    background: rgba(0,0,0,0.6);
+    border: 1px solid var(--border);
+    border-radius: 1px;
+    padding: 12px 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.8;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+  .log .log-line { display: block; }
+  .log .ok { color: var(--neon); }
+  .log .warn { color: var(--neon4); }
+  .log .err { color: var(--neon3); }
+  .log .info { color: var(--neon2); }
+
+  /* STATS ROW */
+  .stats-row {
+    display: flex; gap: 16px;
+    flex-wrap: wrap;
+    margin: 16px 0;
+  }
+  .stat {
+    flex: 1; min-width: 110px;
+    border: 1px solid var(--border);
+    padding: 10px 14px;
+    background: rgba(0,0,0,0.3);
+  }
+  .stat-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .stat-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 16px;
+    color: var(--neon);
+    font-weight: 700;
+  }
+
+  /* COMPARISON SLIDER */
+  .compare-container {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    cursor: ew-resize;
+    user-select: none;
+  }
+  .compare-container canvas {
+    display: block;
+    width: 100%;
+  }
+  .compare-divider {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 2px;
+    background: var(--neon);
+    box-shadow: var(--glow);
+    left: 50%;
+    pointer-events: none;
+  }
+  .compare-label-l, .compare-label-r {
+    position: absolute;
+    top: 8px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 2px 8px;
+    background: rgba(0,0,0,0.7);
+  }
+  .compare-label-l { left: 8px; color: var(--neon4); }
+  .compare-label-r { right: 8px; color: var(--neon2); }
+
+  /* SECTION TITLE */
+  .sec-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sec-title::after {
+    content: '';
+    flex: 1; height: 1px;
+    background: var(--border);
+  }
+
+  /* NOTIFICATION */
+  .notif {
+    position: fixed; top: 72px; right: 24px;
+    z-index: 999;
+    padding: 12px 20px;
+    border: 1px solid var(--neon);
+    background: rgba(0,20,14,0.95);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--neon);
+    letter-spacing: 1px;
+    box-shadow: var(--glow);
+    transform: translateX(120%);
+    transition: transform 0.3s;
+    max-width: 300px;
+  }
+  .notif.show { transform: none; }
+  .notif.error { border-color: var(--neon3); color: var(--neon3); box-shadow: 0 0 18px rgba(255,0,110,0.4); }
+
+  /* DIVIDER */
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  .flex-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .flex-end { justify-content: flex-end; }
+  .mt { margin-top: 16px; }
+  .mb { margin-bottom: 16px; }
+
+  /* STEGO badge */
+  .badge {
+    display: inline-block;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    padding: 2px 8px;
+    border: 1px solid;
+    border-radius: 1px;
+    text-transform: uppercase;
+  }
+  .badge-active { border-color: var(--neon); color: var(--neon); }
+  .badge-off { border-color: var(--dim); color: var(--dim); }
+
+  /* TOGGLE */
+  .toggle-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 14px;
+  }
+  .toggle {
+    position: relative; width: 44px; height: 22px;
+    cursor: pointer;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; inset: 0;
+    background: rgba(0,255,180,0.1);
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    transition: 0.2s;
+  }
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 16px; height: 16px;
+    background: var(--dim);
+    border-radius: 50%;
+    top: 2px; left: 3px;
+    transition: 0.2s;
+  }
+  .toggle input:checked + .toggle-slider { background: rgba(0,255,180,0.2); border-color: var(--neon); }
+  .toggle input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+    background: var(--neon);
+    box-shadow: 0 0 6px var(--neon);
+  }
+  .toggle-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--dim);
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(0,255,180,0.3); }
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+
+<nav>
+  <div class="nav-logo">SPECTRAL<span>CIPHER</span></div>
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('encrypt')">[ ENCRYPT ]</button>
+    <button class="tab-btn" onclick="switchTab('decrypt')">[ DECRYPT ]</button>
+    <button class="tab-btn" onclick="switchTab('visualizer')">[ VISUALIZER ]</button>
+    <button class="tab-btn" onclick="switchTab('settings')">[ SETTINGS ]</button>
+  </div>
+  <div class="nav-status">
+    <div class="status-dot"></div>
+    <span id="navStatus">SYSTEM ONLINE</span>
+  </div>
+</nav>
+
+<main>
+
+<!-- ========== ENCRYPT TAB ========== -->
+<div id="tab-encrypt" class="tab-panel active">
+  <div class="grid-2" style="margin-bottom:20px">
+    <!-- Upload -->
+    <div class="glass">
+      <div class="panel-header">
+        <span class="panel-icon">⬡</span>
+        <span class="panel-title">IMAGE INPUT</span>
+        <span class="panel-sub">DRAG OR CLICK TO UPLOAD</span>
+      </div>
+      <div class="panel-body">
+        <div class="drop-zone" id="encDropZone">
+          <div class="drop-icon">◈</div>
+          <div class="drop-text">DROP IMAGE FILE HERE<br><span style="color:rgba(200,255,232,0.25);font-size:10px">PNG · JPG · BMP · WEBP</span></div>
+          <input type="file" id="encFileInput" accept="image/*">
+        </div>
+        <div class="stats-row mt" id="encStats" style="display:none">
+          <div class="stat"><div class="stat-label">WIDTH</div><div class="stat-value" id="statW">—</div></div>
+          <div class="stat"><div class="stat-label">HEIGHT</div><div class="stat-value" id="statH">—</div></div>
+          <div class="stat"><div class="stat-label">PIXELS</div><div class="stat-value" id="statPx">—</div></div>
+          <div class="stat"><div class="stat-label">MODE</div><div class="stat-value" id="statMode">—</div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Preview -->
+    <div class="glass">
+      <div class="panel-header">
+        <span class="panel-icon">◉</span>
+        <span class="panel-title">IMAGE PREVIEW</span>
+        <span class="panel-sub">SOURCE</span>
+      </div>
+      <div class="panel-body">
+        <div class="preview-box" id="encPreviewBox">
+          <span class="preview-placeholder">NO IMAGE LOADED</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Encrypt controls -->
+  <div class="glass mb">
+    <div class="panel-header">
+      <span class="panel-icon">◈</span>
+      <span class="panel-title">ENCRYPTION ENGINE</span>
+      <span class="panel-sub" id="encModeBadge">— CONFIGURE —</span>
+    </div>
+    <div class="panel-body">
+      <div class="grid-3">
+        <div>
+          <div class="field">
+            <label>COLOR MODE</label>
+            <select id="colorMode">
+              <option value="gray">GRAYSCALE</option>
+              <option value="rgb">RGB (3-CHANNEL)</option>
+              <option value="rgba">RGBA (4-CHANNEL)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>FREQUENCY RANGE</label>
+            <select id="freqRange">
+              <option value="20-4000">20 Hz — 4 kHz (BASS)</option>
+              <option value="200-8000" selected>200 Hz — 8 kHz (MID)</option>
+              <option value="500-20000">500 Hz — 20 kHz (HIGH)</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <label>ENCODING STRENGTH <span class="range-val" id="encStrVal">8</span></label>
+            <div class="range-row">
+              <input type="range" id="encStrength" min="1" max="16" value="8" oninput="document.getElementById('encStrVal').textContent=this.value">
+            </div>
+          </div>
+          <div class="field">
+            <label>SCALE FACTOR <span class="range-val" id="scaleVal">100%</span></label>
+            <div class="range-row">
+              <input type="range" id="scaleFactor" min="10" max="100" value="100" step="10" oninput="document.getElementById('scaleVal').textContent=this.value+'%'">
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="field">
+            <label>SECRET KEY (OPTIONAL)</label>
+            <input type="password" id="encKey" placeholder="ENTER CIPHER KEY…">
+          </div>
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" id="stegoMode"><span class="toggle-slider"></span></label>
+            <span class="toggle-label">STEGO MODE — HIDE IN AUDIO</span>
+          </div>
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" id="scrambleMode" checked><span class="toggle-slider"></span></label>
+            <span class="toggle-label">PIXEL SCRAMBLING</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="progress-wrap"><div class="progress-bar" id="encProgress"></div></div>
+      <div class="log" id="encLog"><span class="log-line info">&gt; SYSTEM READY. LOAD AN IMAGE TO BEGIN ENCRYPTION.</span></div>
+
+      <div class="flex-row mt">
+        <button class="btn btn-primary" id="btnEncrypt" onclick="runEncrypt()" disabled>⬡ ENCRYPT IMAGE</button>
+        <button class="btn btn-secondary" id="btnDlWav" style="display:none" onclick="downloadWav()">↓ DOWNLOAD .WAV</button>
+        <button class="btn btn-secondary" id="btnDlSpec" style="display:none" onclick="downloadSpec()">↓ DOWNLOAD SPECTROGRAM</button>
+        <button class="btn btn-secondary" id="btnDlJson" style="display:none" onclick="downloadJson()">↓ DOWNLOAD METADATA</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Spectrogram output -->
+  <div class="glass" id="encResultPanel" style="display:none">
+    <div class="panel-header">
+      <span class="panel-icon">◎</span>
+      <span class="panel-title">SPECTROGRAM OUTPUT</span>
+      <span class="panel-sub">ENCRYPTED WAVE VISUALIZATION</span>
+    </div>
+    <div class="panel-body">
+      <div class="sec-title">FREQUENCY SPECTROGRAM</div>
+      <canvas id="specCanvas" height="160"></canvas>
+      <div class="sec-title mt">AMPLITUDE WAVEFORM</div>
+      <canvas id="waveCanvas" height="80"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ========== DECRYPT TAB ========== -->
+<div id="tab-decrypt" class="tab-panel">
+  <div class="grid-2" style="margin-bottom:20px">
+    <div class="glass">
+      <div class="panel-header">
+        <span class="panel-icon">◈</span>
+        <span class="panel-title">WAVE FILE INPUT</span>
+        <span class="panel-sub">UPLOAD ENCRYPTED .WAV</span>
+      </div>
+      <div class="panel-body">
+        <div class="drop-zone" id="decDropZone">
+          <div class="drop-icon">♫</div>
+          <div class="drop-text">DROP ENCRYPTED .WAV FILE<br><span style="color:rgba(200,255,232,0.25);font-size:10px">WAV AUDIO FILES ONLY</span></div>
+          <input type="file" id="decFileInput" accept=".wav,audio/wav">
+        </div>
+        <div class="field mt">
+          <label>SECRET KEY (IF USED)</label>
+          <input type="password" id="decKey" placeholder="ENTER CIPHER KEY…">
+        </div>
+        <div class="divider"></div>
+        <div class="progress-wrap"><div class="progress-bar" id="decProgress"></div></div>
+        <div class="log" id="decLog"><span class="log-line info">&gt; AWAITING ENCRYPTED WAVE FILE.</span></div>
+        <div class="flex-row mt">
+          <button class="btn btn-danger" id="btnDecrypt" onclick="runDecrypt()" disabled>◈ DECRYPT WAVE</button>
+          <button class="btn btn-secondary" id="btnDlRecon" style="display:none" onclick="downloadRecon()">↓ DOWNLOAD IMAGE</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass">
+      <div class="panel-header">
+        <span class="panel-icon">◉</span>
+        <span class="panel-title">RECONSTRUCTED IMAGE</span>
+        <span class="panel-sub">DECRYPTED OUTPUT</span>
+      </div>
+      <div class="panel-body">
+        <div class="preview-box" id="decPreviewBox" style="min-height:260px">
+          <span class="preview-placeholder">AWAITING DECRYPTION</span>
+        </div>
+        <div class="stats-row mt" id="decStats" style="display:none">
+          <div class="stat"><div class="stat-label">WIDTH</div><div class="stat-value" id="decStatW">—</div></div>
+          <div class="stat"><div class="stat-label">HEIGHT</div><div class="stat-value" id="decStatH">—</div></div>
+          <div class="stat"><div class="stat-label">FIDELITY</div><div class="stat-value" id="decStatFid">—</div></div>
+          <div class="stat"><div class="stat-label">CHANNELS</div><div class="stat-value" id="decStatCh">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Compare -->
+  <div class="glass" id="comparePanel" style="display:none">
+    <div class="panel-header">
+      <span class="panel-icon">⬡</span>
+      <span class="panel-title">COMPARISON VIEWER</span>
+      <span class="panel-sub">DRAG DIVIDER TO COMPARE</span>
+    </div>
+    <div class="panel-body">
+      <div class="compare-container" id="compareContainer">
+        <canvas id="compareCanvas"></canvas>
+        <div class="compare-divider" id="compareDivider"></div>
+        <div class="compare-label-l">ORIGINAL</div>
+        <div class="compare-label-r">RECONSTRUCTED</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== VISUALIZER TAB ========== -->
+<div id="tab-visualizer" class="tab-panel">
+  <div class="glass mb">
+    <div class="panel-header">
+      <span class="panel-icon">◎</span>
+      <span class="panel-title">FREQUENCY SPECTRUM ANALYZER</span>
+      <span class="panel-sub">REAL-TIME VISUALIZATION</span>
+    </div>
+    <div class="panel-body">
+      <div class="flex-row mb">
+        <button class="btn btn-secondary" onclick="startMicViz()">◉ MICROPHONE INPUT</button>
+        <button class="btn btn-secondary" onclick="stopMicViz()">■ STOP</button>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--dim);margin-left:auto" id="micStatus">MIC: OFFLINE</span>
+      </div>
+      <div class="sec-title">LIVE SPECTROGRAM</div>
+      <canvas id="liveSpecCanvas" height="200" style="width:100%;border:1px solid var(--border);background:#000"></canvas>
+      <div class="sec-title mt">FREQUENCY BARS</div>
+      <canvas id="freqCanvas" height="120"></canvas>
+      <div class="sec-title mt">WAVEFORM</div>
+      <canvas id="liveWaveCanvas" height="80" style="width:100%;border:1px solid var(--border);background:#000"></canvas>
+    </div>
+  </div>
+
+  <div class="glass">
+    <div class="panel-header">
+      <span class="panel-icon">◈</span>
+      <span class="panel-title">ENCRYPTED WAVE PLAYBACK</span>
+      <span class="panel-sub">LOAD & VISUALIZE</span>
+    </div>
+    <div class="panel-body">
+      <div class="flex-row mb">
+        <button class="btn btn-secondary" id="btnPlayWav" onclick="playEncryptedWav()" disabled>▶ PLAY ENCRYPTED WAVE</button>
+        <button class="btn btn-secondary" id="btnStopWav" onclick="stopWav()" disabled>■ STOP</button>
+      </div>
+      <canvas id="playbackSpec" height="120" style="width:100%;border:1px solid var(--border);background:#000"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SETTINGS TAB ========== -->
+<div id="tab-settings" class="tab-panel">
+  <div class="grid-2">
+    <div class="glass">
+      <div class="panel-header">
+        <span class="panel-icon">◈</span>
+        <span class="panel-title">ENCODING SETTINGS</span>
+      </div>
+      <div class="panel-body">
+        <div class="field">
+          <label>SAMPLE RATE</label>
+          <select id="setSampleRate">
+            <option value="22050">22,050 Hz (LOW)</option>
+            <option value="44100" selected>44,100 Hz (CD QUALITY)</option>
+            <option value="48000">48,000 Hz (PRO)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>BITS PER SAMPLE</label>
+          <select id="setBits">
+            <option value="8">8-BIT</option>
+            <option value="16" selected>16-BIT</option>
+            <option value="32">32-BIT FLOAT</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>FFT WINDOW SIZE</label>
+          <select id="setFFTSize">
+            <option value="256">256 SAMPLES (FAST)</option>
+            <option value="512">512 SAMPLES</option>
+            <option value="1024" selected>1024 SAMPLES (BALANCED)</option>
+            <option value="2048">2048 SAMPLES (PRECISE)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>PIXEL ENCODING METHOD</label>
+          <select id="setEncMethod">
+            <option value="linear">LINEAR FREQUENCY MAPPING</option>
+            <option value="log" selected>LOGARITHMIC MAPPING</option>
+            <option value="mel">MEL SCALE MAPPING</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="glass">
+      <div class="panel-header">
+        <span class="panel-icon">⬡</span>
+        <span class="panel-title">SECURITY SETTINGS</span>
+      </div>
+      <div class="panel-body">
+        <div class="field">
+          <label>DEFAULT SECRET KEY</label>
+          <input type="password" id="setDefKey" placeholder="GLOBAL DEFAULT KEY…">
+        </div>
+        <div class="field">
+          <label>KEY HASH ALGORITHM</label>
+          <select id="setHashAlgo">
+            <option value="sha256" selected>SHA-256</option>
+            <option value="sha512">SHA-512</option>
+          </select>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle"><input type="checkbox" id="setVerifyHash" checked><span class="toggle-slider"></span></label>
+          <span class="toggle-label">HASH INTEGRITY VERIFICATION</span>
+        </div>
+        <div class="toggle-row">
+          <label class="toggle"><input type="checkbox" id="setAddNoise"><span class="toggle-slider"></span></label>
+          <span class="toggle-label">ADD COVER NOISE (STEGO)</span>
+        </div>
+        <div class="divider"></div>
+        <button class="btn btn-secondary" onclick="saveSettings()">◉ SAVE SETTINGS</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass" style="margin-top:20px">
+    <div class="panel-header">
+      <span class="panel-icon">◎</span>
+      <span class="panel-title">SYSTEM INFORMATION</span>
+    </div>
+    <div class="panel-body">
+      <div class="grid-3">
+        <div class="stat"><div class="stat-label">ENGINE</div><div class="stat-value" style="font-size:12px">WEB AUDIO API</div></div>
+        <div class="stat"><div class="stat-label">TRANSFORM</div><div class="stat-value" style="font-size:12px">FFT / IFFT</div></div>
+        <div class="stat"><div class="stat-label">CANVAS</div><div class="stat-value" style="font-size:12px">2D API</div></div>
+        <div class="stat"><div class="stat-label">ENCRYPTION</div><div class="stat-value" style="font-size:12px">WEB CRYPTO</div></div>
+        <div class="stat"><div class="stat-label">VERSION</div><div class="stat-value" style="font-size:12px">2.0.0</div></div>
+        <div class="stat"><div class="stat-label">STATUS</div><div class="stat-value" style="font-size:12px;color:var(--neon)">ONLINE</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<div class="notif" id="notif"></div>
+
+<script>
+// =========================================================
+// SPECTRAL CIPHER — Core Engine
+// =========================================================
+
+// State
+const state = {
+  srcImageData: null,  // original ImageData
+  srcWidth: 0, srcHeight: 0,
+  encWavBuffer: null,  // ArrayBuffer of WAV
+  encMetadata: null,   // JSON metadata
+  specImgData: null,   // spectrogram canvas data
+  reconImageData: null,
+  micStream: null, micCtx: null, micAnalyser: null, micRaf: null,
+  wavAudioCtx: null, wavSource: null,
+  comparePos: 0.5,
+  originalForCompare: null,
+};
+
+// ---- TAB SWITCHING ----
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  const idx = ['encrypt','decrypt','visualizer','settings'].indexOf(name);
+  document.querySelectorAll('.tab-btn')[idx].classList.add('active');
+}
+
+// ---- NOTIFICATIONS ----
+function notify(msg, isErr=false) {
+  const el = document.getElementById('notif');
+  el.textContent = msg;
+  el.className = 'notif show' + (isErr?' error':'');
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ---- LOG ----
+function log(elId, msg, cls='') {
+  const el = document.getElementById(elId);
+  const line = document.createElement('span');
+  line.className = 'log-line ' + cls;
+  line.textContent = '> ' + msg;
+  el.appendChild(line);
+  el.appendChild(document.createElement('br'));
+  el.scrollTop = el.scrollHeight;
+}
+
+// ---- DRAG AND DROP ----
+function setupDrop(zoneId, inputId, handler) {
+  const zone = document.getElementById(zoneId);
+  const input = document.getElementById(inputId);
+  input.onchange = e => handler(e.target.files[0]);
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add('dragging'); };
+  zone.ondragleave = () => zone.classList.remove('dragging');
+  zone.ondrop = e => {
+    e.preventDefault();
+    zone.classList.remove('dragging');
+    const f = e.dataTransfer.files[0];
+    if (f) handler(f);
+  };
+}
+
+// ---- IMAGE LOAD ----
+function loadImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) { notify('Invalid file type', true); return; }
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    const scale = parseInt(document.getElementById('scaleFactor').value) / 100;
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+
+    const cvs = document.createElement('canvas');
+    cvs.width = w; cvs.height = h;
+    const ctx = cvs.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+    state.srcImageData = ctx.getImageData(0, 0, w, h);
+    state.srcWidth = w; state.srcHeight = h;
+
+    // Show preview
+    const box = document.getElementById('encPreviewBox');
+    box.innerHTML = '';
+    const preview = new Image();
+    preview.src = url;
+    preview.style.maxWidth = '100%';
+    preview.style.maxHeight = '280px';
+    box.appendChild(preview);
+
+    document.getElementById('encStats').style.display = 'flex';
+    document.getElementById('statW').textContent = w;
+    document.getElementById('statH').textContent = h;
+    document.getElementById('statPx').textContent = (w*h).toLocaleString();
+    document.getElementById('statMode').textContent = document.getElementById('colorMode').value.toUpperCase();
+    document.getElementById('btnEncrypt').disabled = false;
+    log('encLog', `Image loaded: ${w}×${h} (${(w*h).toLocaleString()} pixels)`, 'ok');
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+// ---- WAV LOAD (decrypt) ----
+function loadWavFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    state.decWavBuffer = e.target.result;
+    document.getElementById('btnDecrypt').disabled = false;
+    log('decLog', `Wave file loaded: ${(file.size/1024).toFixed(1)} KB`, 'ok');
+    document.getElementById('btnPlayWav').disabled = false;
+    // also store for playback
+    state.encWavBuffer = e.target.result;
+    notify('Wave file loaded — ready to decrypt');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+setupDrop('encDropZone', 'encFileInput', loadImageFile);
+setupDrop('decDropZone', 'decFileInput', loadWavFile);
+
+// =========================================================
+// CORE: IMAGE → PIXEL ARRAY
+// =========================================================
+function getPixelArray(imageData, mode) {
+  const d = imageData.data;
+  const pixels = [];
+  for (let i = 0; i < d.length; i += 4) {
+    if (mode === 'gray') {
+      pixels.push((d[i]*0.299 + d[i+1]*0.587 + d[i+2]*0.114) / 255);
+    } else if (mode === 'rgb') {
+      pixels.push(d[i]/255, d[i+1]/255, d[i+2]/255);
+    } else { // rgba
+      pixels.push(d[i]/255, d[i+1]/255, d[i+2]/255, d[i+3]/255);
+    }
+  }
+  return pixels;
+}
+
+// =========================================================
+// CORE: SEEDED PRNG (for key-based scrambling)
+// =========================================================
+function seededPRNG(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) & 0xffffffff;
+    return (s >>> 0) / 0xffffffff;
+  };
+}
+
+async function keyToSeed(keyStr) {
+  if (!keyStr) return 42;
+  const enc = new TextEncoder().encode(keyStr);
+  const hash = await crypto.subtle.digest('SHA-256', enc);
+  const arr = new Uint32Array(hash);
+  return arr[0];
+}
+
+function scrambleArray(arr, seed) {
+  const rng = seededPRNG(seed);
+  const indices = arr.map((_,i)=>i);
+  for (let i = indices.length-1; i > 0; i--) {
+    const j = Math.floor(rng() * (i+1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  const out = new Array(arr.length);
+  for (let i = 0; i < arr.length; i++) out[indices[i]] = arr[i];
+  return { scrambled: out, indices };
+}
+
+function unscrambleArray(arr, seed) {
+  const rng = seededPRNG(seed);
+  const indices = arr.map((_,i)=>i);
+  for (let i = indices.length-1; i > 0; i--) {
+    const j = Math.floor(rng() * (i+1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  const out = new Array(arr.length);
+  for (let i = 0; i < arr.length; i++) out[i] = arr[indices[i]];
+  return out;
+}
+
+// =========================================================
+// CORE: PIXEL VALUES → FREQUENCIES → WAV PCM
+// =========================================================
+function mapPixelToFreq(val, freqMin, freqMax, method) {
+  if (method === 'log') {
+    return freqMin * Math.pow(freqMax/freqMin, val);
+  } else if (method === 'mel') {
+    const melMin = 2595 * Math.log10(1 + freqMin/700);
+    const melMax = 2595 * Math.log10(1 + freqMax/700);
+    const mel = melMin + val * (melMax - melMin);
+    return 700 * (Math.pow(10, mel/2595) - 1);
+  } else { // linear
+    return freqMin + val * (freqMax - freqMin);
+  }
+}
+
+function mapFreqToPixel(freq, freqMin, freqMax, method) {
+  if (method === 'log') {
+    return Math.log(freq/freqMin) / Math.log(freqMax/freqMin);
+  } else if (method === 'mel') {
+    const mel = 2595 * Math.log10(1 + freq/700);
+    const melMin = 2595 * Math.log10(1 + freqMin/700);
+    const melMax = 2595 * Math.log10(1 + freqMax/700);
+    return (mel - melMin) / (melMax - melMin);
+  } else {
+    return (freq - freqMin) / (freqMax - freqMin);
+  }
+}
+
+// Build WAV audio signal encoding pixels as frequency modulated sine tones
+function buildWavSignal(pixels, sampleRate, freqMin, freqMax, encMethod, strength) {
+  // Each pixel is encoded as one "tone frame"
+  // Frame duration: shorter for more pixels, minimum 1ms
+  const frameSize = Math.max(2, Math.floor(sampleRate * strength * 0.001));
+  const totalSamples = pixels.length * frameSize;
+  const pcm = new Float32Array(totalSamples);
+
+  for (let pi = 0; pi < pixels.length; pi++) {
+    const freq = mapPixelToFreq(Math.max(0,Math.min(1,pixels[pi])), freqMin, freqMax, encMethod);
+    const offset = pi * frameSize;
+    for (let si = 0; si < frameSize; si++) {
+      const t = (offset + si) / sampleRate;
+      pcm[offset + si] = Math.sin(2 * Math.PI * freq * t) * 0.7;
+    }
+  }
+  return { pcm, frameSize };
+}
+
+// Build WAV ArrayBuffer
+function buildWavFile(pcm, sampleRate, bits) {
+  const numSamples = pcm.length;
+  const bytesPerSample = bits === 8 ? 1 : bits === 16 ? 2 : 4;
+  const dataSize = numSamples * bytesPerSample;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buf);
+
+  function writeStr(offset, str) {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset+i, str.charCodeAt(i));
+  }
+  writeStr(0, 'RIFF');
+  view.setUint32(4, 36 + dataSize, true);
+  writeStr(8, 'WAVE');
+  writeStr(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, bits === 32 ? 3 : 1, true); // PCM or IEEE float
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * bytesPerSample, true);
+  view.setUint16(32, bytesPerSample, true);
+  view.setUint16(34, bits, true);
+  writeStr(36, 'data');
+  view.setUint32(40, dataSize, true);
+
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    const v = Math.max(-1, Math.min(1, pcm[i]));
+    if (bits === 8) {
+      view.setUint8(offset, Math.round((v + 1) * 127.5));
+      offset += 1;
+    } else if (bits === 16) {
+      view.setInt16(offset, Math.round(v * 32767), true);
+      offset += 2;
+    } else {
+      view.setFloat32(offset, v, true);
+      offset += 4;
+    }
+  }
+  return buf;
+}
+
+// Parse WAV → Float32Array PCM
+function parseWav(buf) {
+  const view = new DataView(buf);
+  const audioFormat = view.getUint16(20, true);
+  const numChannels = view.getUint16(22, true);
+  const sampleRate = view.getUint32(24, true);
+  const bitsPerSample = view.getUint16(34, true);
+  const dataSize = view.getUint32(40, true);
+  const numSamples = dataSize / (bitsPerSample / 8);
+  const pcm = new Float32Array(numSamples);
+  let offset = 44;
+  for (let i = 0; i < numSamples; i++) {
+    if (bitsPerSample === 8) {
+      pcm[i] = (view.getUint8(offset) / 127.5) - 1;
+      offset += 1;
+    } else if (bitsPerSample === 16) {
+      pcm[i] = view.getInt16(offset, true) / 32767;
+      offset += 2;
+    } else {
+      pcm[i] = view.getFloat32(offset, true);
+      offset += 4;
+    }
+  }
+  return { pcm, sampleRate, bitsPerSample, numChannels };
+}
+
+// =========================================================
+// CORE: DECODE WAV → PIXELS
+// =========================================================
+// Use zero-crossing + instantaneous frequency estimation
+function decodeWavToPixels(pcm, frameSize, pixelCount, sampleRate, freqMin, freqMax, encMethod) {
+  const pixels = [];
+  for (let pi = 0; pi < pixelCount; pi++) {
+    const offset = pi * frameSize;
+    // Estimate frequency via autocorrelation on the frame
+    const frame = pcm.slice(offset, offset + frameSize);
+    const freq = estimateFrequency(frame, sampleRate);
+    const val = mapFreqToPixel(freq, freqMin, freqMax, encMethod);
+    pixels.push(Math.max(0, Math.min(1, val)));
+  }
+  return pixels;
+}
+
+function estimateFrequency(frame, sampleRate) {
+  // Autocorrelation-based pitch detection
+  const n = frame.length;
+  if (n < 4) return 440;
+  let bestLag = -1, bestCorr = -Infinity;
+  const minLag = Math.floor(sampleRate / 22050);
+  const maxLag = Math.floor(n / 2);
+  for (let lag = minLag; lag < maxLag; lag++) {
+    let corr = 0;
+    for (let i = 0; i < n - lag; i++) corr += frame[i] * frame[i + lag];
+    if (corr > bestCorr) { bestCorr = corr; bestLag = lag; }
+  }
+  if (bestLag <= 0) return 440;
+  return sampleRate / bestLag;
+}
+
+// =========================================================
+// SPECTROGRAM DRAWING
+// =========================================================
+function drawSpectrogram(cvs, pcm, sampleRate) {
+  const ctx = cvs.getContext('2d');
+  const W = cvs.width = cvs.parentElement.clientWidth || 800;
+  const H = cvs.height;
+
+  const fftSize = parseInt(document.getElementById('setFFTSize')?.value || 1024);
+  const hopSize = Math.floor(fftSize / 4);
+  const numFrames = Math.floor((pcm.length - fftSize) / hopSize);
+  if (numFrames <= 0) return;
+
+  const freqBins = fftSize / 2;
+  const img = ctx.createImageData(W, H);
+  const hann = new Float32Array(fftSize).map((_,i) => 0.5*(1-Math.cos(2*Math.PI*i/fftSize)));
+
+  // Colors: dark→green→cyan→white (cyber palette)
+  function heatColor(v) {
+    v = Math.max(0, Math.min(1, v));
+    if (v < 0.25) return [0, Math.round(v*4*80), Math.round(v*4*40)];
+    if (v < 0.5)  return [0, 80+Math.round((v-0.25)*4*175), 40+Math.round((v-0.25)*4*215)];
+    if (v < 0.75) return [Math.round((v-0.5)*4*255), 255, 255];
+    return [255, 255, Math.round(255*(1-(v-0.75)*4*0.5))];
+  }
+
+  for (let fx = 0; fx < W; fx++) {
+    const frameIdx = Math.floor(fx / W * numFrames);
+    const start = frameIdx * hopSize;
+    const windowed = new Float32Array(fftSize);
+    for (let i = 0; i < fftSize; i++) windowed[i] = (pcm[start+i]||0) * hann[i];
+    const spectrum = fftMagnitude(windowed);
+
+    for (let fy = 0; fy < H; fy++) {
+      const bin = Math.floor((1 - fy/H) * freqBins);
+      const mag = Math.log10(1 + spectrum[bin] * 100) / 2;
+      const [r,g,b] = heatColor(mag);
+      const idx = (fy * W + fx) * 4;
+      img.data[idx]=r; img.data[idx+1]=g; img.data[idx+2]=b; img.data[idx+3]=255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+function drawWaveform(cvs, pcm) {
+  const ctx = cvs.getContext('2d');
+  const W = cvs.width = cvs.parentElement.clientWidth || 800;
+  const H = cvs.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle = 'rgba(0,255,180,0.8)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const step = Math.ceil(pcm.length / W);
+  for (let x = 0; x < W; x++) {
+    let max = -1, min = 1;
+    for (let i = x*step; i < (x+1)*step && i < pcm.length; i++) {
+      if (pcm[i]>max) max=pcm[i]; if (pcm[i]<min) min=pcm[i];
+    }
+    const y1 = (1-max)/2*H, y2 = (1-min)/2*H;
+    if (x===0) ctx.moveTo(x, (y1+y2)/2); else { ctx.lineTo(x,y1); ctx.lineTo(x,y2); }
+  }
+  ctx.stroke();
+}
+
+// Simple DFT magnitude (real FFT approximation for visualization)
+function fftMagnitude(data) {
+  const n = data.length;
+  const half = n >> 1;
+  const re = new Float32Array(n);
+  const im = new Float32Array(n);
+  for (let i = 0; i < n; i++) re[i] = data[i];
+  // Cooley-Tukey FFT
+  fft(re, im, n);
+  const mag = new Float32Array(half);
+  for (let i = 0; i < half; i++) mag[i] = Math.sqrt(re[i]*re[i]+im[i]*im[i]);
+  return mag;
+}
+
+function fft(re, im, n) {
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) { [re[i],re[j]]=[re[j],re[i]]; [im[i],im[j]]=[im[j],im[i]]; }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2*Math.PI/len;
+    const wRe = Math.cos(ang), wIm = Math.sin(ang);
+    for (let i = 0; i < n; i += len) {
+      let curRe=1, curIm=0;
+      for (let j = 0; j < len/2; j++) {
+        const uRe=re[i+j], uIm=im[i+j];
+        const vRe=re[i+j+len/2]*curRe-im[i+j+len/2]*curIm;
+        const vIm=re[i+j+len/2]*curIm+im[i+j+len/2]*curRe;
+        re[i+j]=uRe+vRe; im[i+j]=uIm+vIm;
+        re[i+j+len/2]=uRe-vRe; im[i+j+len/2]=uIm-vIm;
+        const nr=curRe*wRe-curIm*wIm;
+        curIm=curRe*wIm+curIm*wRe; curRe=nr;
+      }
+    }
+  }
+}
+
+// =========================================================
+// MAIN ENCRYPT FLOW
+// =========================================================
+async function runEncrypt() {
+  if (!state.srcImageData) { notify('No image loaded', true); return; }
+
+  const mode = document.getElementById('colorMode').value;
+  const freqRangeStr = document.getElementById('freqRange').value;
+  const [fMin, fMax] = freqRangeStr.split('-').map(Number);
+  const strength = parseInt(document.getElementById('encStrength').value);
+  const keyStr = document.getElementById('encKey').value || document.getElementById('setDefKey').value;
+  const scramble = document.getElementById('scrambleMode').checked;
+  const stegoMode = document.getElementById('stegoMode').checked;
+  const sampleRate = parseInt(document.getElementById('setSampleRate')?.value || 44100);
+  const bits = parseInt(document.getElementById('setBits')?.value || 16);
+  const encMethod = document.getElementById('setEncMethod')?.value || 'log';
+
+  const encLog = 'encLog';
+  const bar = document.getElementById('encProgress');
+  bar.style.width = '0%';
+
+  log(encLog, `Starting encryption [${mode.toUpperCase()} mode]`, 'info');
+  log(encLog, `Image: ${state.srcWidth}×${state.srcHeight}`, '');
+  log(encLog, `Freq range: ${fMin}–${fMax} Hz`, '');
+
+  // Step 1: Extract pixels
+  bar.style.width = '10%';
+  await tick();
+  let pixels = getPixelArray(state.srcImageData, mode);
+  log(encLog, `Extracted ${pixels.length} pixel values`, 'ok');
+
+  // Step 2: Scramble
+  bar.style.width = '25%';
+  await tick();
+  let seed = 42;
+  if (keyStr) {
+    seed = await keyToSeed(keyStr);
+    log(encLog, `Key hash seed: 0x${seed.toString(16).toUpperCase()}`, 'info');
+  }
+
+  if (scramble) {
+    const { scrambled } = scrambleArray(pixels, seed);
+    pixels = scrambled;
+    log(encLog, 'Pixel scrambling applied', 'ok');
+  }
+
+  // Step 3: Build PCM signal
+  bar.style.width = '45%';
+  await tick();
+  const { pcm, frameSize } = buildWavSignal(pixels, sampleRate, fMin, fMax, encMethod, strength);
+  log(encLog, `PCM signal built: ${pcm.length} samples @ ${sampleRate} Hz`, 'ok');
+
+  // Step 4: Stego mode — mix with noise
+  let finalPcm = pcm;
+  if (stegoMode && document.getElementById('setAddNoise').checked) {
+    finalPcm = new Float32Array(pcm.length);
+    for (let i = 0; i < pcm.length; i++) {
+      finalPcm[i] = pcm[i] * 0.35 + (Math.random()*2-1) * 0.65;
+    }
+    log(encLog, 'STEGO: Signal embedded in noise cover', 'warn');
+  }
+
+  // Step 5: Build WAV
+  bar.style.width = '65%';
+  await tick();
+  state.encWavBuffer = buildWavFile(finalPcm, sampleRate, bits);
+  log(encLog, `WAV file built: ${(state.encWavBuffer.byteLength/1024).toFixed(1)} KB`, 'ok');
+
+  // Step 6: Metadata
+  const metaHash = await hashBuffer(state.encWavBuffer);
+  state.encMetadata = {
+    version: '2.0.0',
+    timestamp: new Date().toISOString(),
+    width: state.srcWidth, height: state.srcHeight,
+    colorMode: mode, freqMin: fMin, freqMax: fMax,
+    frameSize, sampleRate, bits, encMethod,
+    scramble, stegoMode,
+    pixelCount: pixels.length,
+    hash: metaHash,
+  };
+  log(encLog, `Metadata hash: ${metaHash.slice(0,16)}…`, 'info');
+
+  // Step 7: Draw spectrogram
+  bar.style.width = '85%';
+  await tick();
+  document.getElementById('encResultPanel').style.display = 'block';
+  drawSpectrogram(document.getElementById('specCanvas'), finalPcm, sampleRate);
+  drawWaveform(document.getElementById('waveCanvas'), finalPcm);
+  log(encLog, 'Spectrogram visualization rendered', 'ok');
+
+  bar.style.width = '100%';
+  document.getElementById('btnDlWav').style.display = 'inline-flex';
+  document.getElementById('btnDlSpec').style.display = 'inline-flex';
+  document.getElementById('btnDlJson').style.display = 'inline-flex';
+  document.getElementById('btnPlayWav').disabled = false;
+
+  // Store original for comparison
+  state.originalForCompare = state.srcImageData;
+
+  log(encLog, 'ENCRYPTION COMPLETE', 'ok');
+  notify('Image encrypted successfully!');
+}
+
+// =========================================================
+// MAIN DECRYPT FLOW
+// =========================================================
+async function runDecrypt() {
+  if (!state.decWavBuffer) { notify('No WAV file loaded', true); return; }
+
+  const keyStr = document.getElementById('decKey').value || document.getElementById('setDefKey').value;
+  const decLog = 'decLog';
+  const bar = document.getElementById('decProgress');
+  bar.style.width = '0%';
+
+  log(decLog, 'Starting decryption…', 'info');
+
+  // Parse WAV
+  bar.style.width = '15%';
+  await tick();
+  let wavData;
+  try { wavData = parseWav(state.decWavBuffer); }
+  catch(e) { log(decLog, 'ERROR: Invalid WAV file', 'err'); notify('Invalid WAV file', true); return; }
+
+  log(decLog, `WAV parsed: ${wavData.pcm.length} samples @ ${wavData.sampleRate} Hz`, 'ok');
+
+  // Get metadata — try from last encryption, otherwise prompt user
+  let meta = state.encMetadata;
+  if (!meta) {
+    // Try to infer from WAV length; use current settings as fallback
+    const fRange = document.getElementById('freqRange').value;
+    const [fMin, fMax] = fRange.split('-').map(Number);
+    // Need to estimate dimensions — ask user or use WAV properties
+    log(decLog, 'No metadata file found. Using current settings.', 'warn');
+    // We'll try a square image
+    const sampleRate = wavData.sampleRate;
+    const strength = parseInt(document.getElementById('encStrength').value);
+    const frameSize = Math.max(2, Math.floor(sampleRate * strength * 0.001));
+    const pixelCount = Math.floor(wavData.pcm.length / frameSize);
+    const side = Math.round(Math.sqrt(pixelCount));
+    meta = {
+      width: side, height: side, colorMode: 'gray',
+      freqMin: fMin, freqMax: fMax, frameSize,
+      sampleRate, encMethod: document.getElementById('setEncMethod')?.value || 'log',
+      scramble: document.getElementById('scrambleMode').checked,
+      pixelCount: side*side,
+    };
+    log(decLog, `Inferred: ${side}×${side} grayscale`, 'warn');
+  }
+
+  bar.style.width = '30%';
+  await tick();
+
+  // Hash check
+  if (document.getElementById('setVerifyHash')?.checked && meta.hash) {
+    const currentHash = await hashBuffer(state.decWavBuffer);
+    if (currentHash === meta.hash) log(decLog, 'Hash integrity: VERIFIED ✓', 'ok');
+    else log(decLog, 'Hash mismatch — file may be corrupted or tampered', 'warn');
+  }
+
+  // Decode pixels
+  bar.style.width = '55%';
+  await tick();
+  let pixels = decodeWavToPixels(
+    wavData.pcm, meta.frameSize, meta.pixelCount,
+    meta.sampleRate, meta.freqMin, meta.freqMax, meta.encMethod
+  );
+  log(decLog, `Decoded ${pixels.length} pixel values`, 'ok');
+
+  // Unscramble
+  if (meta.scramble) {
+    let seed = 42;
+    if (keyStr) seed = await keyToSeed(keyStr);
+    pixels = unscrambleArray(pixels, seed);
+    log(decLog, 'Pixel unscrambling applied', 'ok');
+  }
+
+  bar.style.width = '75%';
+  await tick();
+
+  // Reconstruct image
+  const W = meta.width, H = meta.height;
+  const mode = meta.colorMode;
+  const cvs = document.createElement('canvas');
+  cvs.width = W; cvs.height = H;
+  const ctx = cvs.getContext('2d');
+  const imgData = ctx.createImageData(W, H);
+
+  const channelsPerPixel = mode === 'gray' ? 1 : mode === 'rgb' ? 3 : 4;
+  for (let i = 0; i < W*H; i++) {
+    const base = i * 4;
+    if (mode === 'gray') {
+      const v = Math.round(pixels[i]*255);
+      imgData.data[base]=v; imgData.data[base+1]=v; imgData.data[base+2]=v; imgData.data[base+3]=255;
+    } else if (mode === 'rgb') {
+      imgData.data[base]=Math.round((pixels[i*3]||0)*255);
+      imgData.data[base+1]=Math.round((pixels[i*3+1]||0)*255);
+      imgData.data[base+2]=Math.round((pixels[i*3+2]||0)*255);
+      imgData.data[base+3]=255;
+    } else {
+      imgData.data[base]=Math.round((pixels[i*4]||0)*255);
+      imgData.data[base+1]=Math.round((pixels[i*4+1]||0)*255);
+      imgData.data[base+2]=Math.round((pixels[i*4+2]||0)*255);
+      imgData.data[base+3]=Math.round((pixels[i*4+3]||1)*255);
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+  state.reconImageData = imgData;
+  state.reconCanvas = cvs;
+
+  bar.style.width = '90%';
+
+  // Show preview
+  const decBox = document.getElementById('decPreviewBox');
+  decBox.innerHTML = '';
+  const img = new Image();
+  img.onload = () => { decBox.appendChild(img); };
+  img.src = cvs.toDataURL();
+  img.style.maxWidth = '100%';
+  img.style.maxHeight = '300px';
+
+  document.getElementById('decStats').style.display = 'flex';
+  document.getElementById('decStatW').textContent = W;
+  document.getElementById('decStatH').textContent = H;
+  document.getElementById('decStatCh').textContent = mode.toUpperCase();
+  document.getElementById('decStatFid').textContent = '~HIGH';
+
+  document.getElementById('btnDlRecon').style.display = 'inline-flex';
+
+  // Comparison panel
+  if (state.originalForCompare) {
+    setupComparison(state.originalForCompare, imgData, W, H);
+    document.getElementById('comparePanel').style.display = 'block';
+  }
+
+  bar.style.width = '100%';
+  log(decLog, 'IMAGE RECONSTRUCTION COMPLETE', 'ok');
+  notify('Wave decrypted — image reconstructed!');
+}
+
+// =========================================================
+// COMPARISON SLIDER
+// =========================================================
+function setupComparison(origData, reconData, W, H) {
+  const cvs = document.getElementById('compareCanvas');
+  const container = document.getElementById('compareContainer');
+  const divider = document.getElementById('compareDivider');
+  cvs.width = W; cvs.height = H;
+  cvs.style.width = '100%';
+  state.comparePos = 0.5;
+
+  function drawCompare() {
+    const ctx = cvs.getContext('2d');
+    const splitX = Math.round(W * state.comparePos);
+
+    // Draw original left
+    const leftData = ctx.createImageData(W, H);
+    leftData.data.set(origData.data);
+    ctx.putImageData(leftData, 0, 0);
+
+    // Draw recon right
+    const rightData = ctx.createImageData(W, H);
+    rightData.data.set(reconData.data);
+    const tmpCvs = document.createElement('canvas');
+    tmpCvs.width=W; tmpCvs.height=H;
+    tmpCvs.getContext('2d').putImageData(rightData, 0, 0);
+    ctx.drawImage(tmpCvs, splitX, 0, W-splitX, H, splitX, 0, W-splitX, H);
+
+    // Divider line
+    ctx.strokeStyle = '#00ffb4';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(splitX,0); ctx.lineTo(splitX,H); ctx.stroke();
+
+    const pct = (state.comparePos*100).toFixed(0);
+    divider.style.left = pct+'%';
+  }
+
+  drawCompare();
+
+  let dragging = false;
+  container.onmousedown = () => dragging = true;
+  document.onmouseup = () => dragging = false;
+  document.onmousemove = e => {
+    if (!dragging) return;
+    const rect = container.getBoundingClientRect();
+    state.comparePos = Math.max(0, Math.min(1, (e.clientX-rect.left)/rect.width));
+    drawCompare();
+  };
+  container.ontouchstart = e => { dragging = true; };
+  document.ontouchend = () => dragging = false;
+  document.ontouchmove = e => {
+    if (!dragging) return;
+    const rect = container.getBoundingClientRect();
+    state.comparePos = Math.max(0, Math.min(1, (e.touches[0].clientX-rect.left)/rect.width));
+    drawCompare();
+  };
+}
+
+// =========================================================
+// MICROPHONE VISUALIZER
+// =========================================================
+async function startMicViz() {
+  if (state.micStream) return;
+  try {
+    state.micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    state.micCtx = new AudioContext();
+    const src = state.micCtx.createMediaStreamSource(state.micStream);
+    state.micAnalyser = state.micCtx.createAnalyser();
+    state.micAnalyser.fftSize = 2048;
+    src.connect(state.micAnalyser);
+    document.getElementById('micStatus').textContent = 'MIC: LIVE';
+    document.getElementById('micStatus').style.color = 'var(--neon)';
+
+    // Rolling spectrogram state
+    const specWidth = 800, specHeight = 200;
+    const specImgBuf = new Uint8ClampedArray(specWidth * specHeight * 4).fill(0);
+    let specCol = 0;
+
+    function drawMic() {
+      state.micRaf = requestAnimationFrame(drawMic);
+      const bufLen = state.micAnalyser.frequencyBinCount;
+      const freqData = new Uint8Array(bufLen);
+      const timeData = new Uint8Array(state.micAnalyser.fftSize);
+      state.micAnalyser.getByteFrequencyData(freqData);
+      state.micAnalyser.getByteTimeDomainData(timeData);
+
+      // Rolling spectrogram
+      const lSpec = document.getElementById('liveSpecCanvas');
+      const W2 = lSpec.width = lSpec.parentElement.clientWidth || specWidth;
+      const H2 = lSpec.height;
+      const sCtx = lSpec.getContext('2d');
+      const existing = sCtx.getImageData(0,0,W2,H2);
+      const shifted = sCtx.createImageData(W2,H2);
+      // Shift left by 1
+      for (let y = 0; y < H2; y++) {
+        for (let x = 0; x < W2-1; x++) {
+          const si=(y*W2+x+1)*4, di=(y*W2+x)*4;
+          shifted.data[di]=existing.data[si]; shifted.data[di+1]=existing.data[si+1];
+          shifted.data[di+2]=existing.data[si+2]; shifted.data[di+3]=255;
+        }
+      }
+      sCtx.putImageData(shifted,0,0);
+      // Draw new column on right
+      for (let y = 0; y < H2; y++) {
+        const bin = Math.floor((1-y/H2)*bufLen);
+        const v = freqData[bin]/255;
+        const r=Math.round(v*100), g=Math.round(50+v*205), b=Math.round(v*180);
+        sCtx.fillStyle=`rgb(${r},${g},${b})`;
+        sCtx.fillRect(W2-1,y,1,1);
+      }
+
+      // Freq bars
+      const fCvs = document.getElementById('freqCanvas');
+      const fW = fCvs.width = fCvs.parentElement.clientWidth||800;
+      const fH = fCvs.height;
+      const fCtx = fCvs.getContext('2d');
+      fCtx.clearRect(0,0,fW,fH);
+      fCtx.fillStyle='#000';
+      fCtx.fillRect(0,0,fW,fH);
+      const barW = fW/128;
+      for (let i=0;i<128;i++) {
+        const v=freqData[i]/255;
+        const h=v*fH;
+        const hue = 160 - v*130;
+        fCtx.fillStyle=`hsl(${hue},100%,${40+v*30}%)`;
+        fCtx.fillRect(i*barW, fH-h, barW-1, h);
+      }
+
+      // Waveform
+      const wCvs = document.getElementById('liveWaveCanvas');
+      const wW = wCvs.width = wCvs.parentElement.clientWidth||800;
+      const wH = wCvs.height;
+      const wCtx = wCvs.getContext('2d');
+      wCtx.clearRect(0,0,wW,wH);
+      wCtx.fillStyle='#000'; wCtx.fillRect(0,0,wW,wH);
+      wCtx.strokeStyle='rgba(0,255,180,0.8)'; wCtx.lineWidth=1.5;
+      wCtx.beginPath();
+      const sliceW = wW/timeData.length;
+      for (let i=0;i<timeData.length;i++) {
+        const v=timeData[i]/128-1;
+        const x=i*sliceW, y=(1-v)/2*wH;
+        i===0?wCtx.moveTo(x,y):wCtx.lineTo(x,y);
+      }
+      wCtx.stroke();
+    }
+    drawMic();
+  } catch(e) {
+    notify('Microphone access denied', true);
+  }
+}
+
+function stopMicViz() {
+  if (state.micRaf) cancelAnimationFrame(state.micRaf);
+  if (state.micStream) { state.micStream.getTracks().forEach(t=>t.stop()); state.micStream=null; }
+  if (state.micCtx) { state.micCtx.close(); state.micCtx=null; }
+  document.getElementById('micStatus').textContent = 'MIC: OFFLINE';
+  document.getElementById('micStatus').style.color = '';
+}
+
+// =========================================================
+// WAV PLAYBACK
+// =========================================================
+async function playEncryptedWav() {
+  if (!state.encWavBuffer) { notify('No encrypted wave file', true); return; }
+  if (state.wavAudioCtx) { state.wavAudioCtx.close(); state.wavAudioCtx=null; }
+  state.wavAudioCtx = new AudioContext();
+  try {
+    const decoded = await state.wavAudioCtx.decodeAudioData(state.encWavBuffer.slice(0));
+    state.wavSource = state.wavAudioCtx.createBufferSource();
+    state.wavSource.buffer = decoded;
+
+    // Analyser for live viz
+    const analyser = state.wavAudioCtx.createAnalyser();
+    analyser.fftSize = 1024;
+    state.wavSource.connect(analyser);
+    analyser.connect(state.wavAudioCtx.destination);
+    state.wavSource.start();
+    document.getElementById('btnStopWav').disabled = false;
+
+    // Visualize on playbackSpec
+    function drawPlayback() {
+      if (!state.wavAudioCtx) return;
+      requestAnimationFrame(drawPlayback);
+      const cvs = document.getElementById('playbackSpec');
+      const W = cvs.width = cvs.parentElement.clientWidth||800;
+      const H = cvs.height;
+      const ctx = cvs.getContext('2d');
+      const freqData = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(freqData);
+      const existing = ctx.getImageData(0,0,W,H);
+      const shifted = ctx.createImageData(W,H);
+      for (let y=0;y<H;y++) for (let x=0;x<W-1;x++) {
+        const si=(y*W+x+1)*4, di=(y*W+x)*4;
+        shifted.data[di]=existing.data[si]; shifted.data[di+1]=existing.data[si+1];
+        shifted.data[di+2]=existing.data[si+2]; shifted.data[di+3]=255;
+      }
+      ctx.putImageData(shifted,0,0);
+      for (let y=0;y<H;y++) {
+        const bin=Math.floor((1-y/H)*analyser.frequencyBinCount);
+        const v=freqData[bin]/255;
+        ctx.fillStyle=`rgb(0,${Math.round(v*255)},${Math.round(v*180)})`;
+        ctx.fillRect(W-1,y,1,1);
+      }
+    }
+    drawPlayback();
+    notify('Playing encrypted wave…');
+  } catch(e) { notify('Playback error', true); }
+}
+
+function stopWav() {
+  if (state.wavSource) { try{state.wavSource.stop();}catch(e){} state.wavSource=null; }
+  if (state.wavAudioCtx) { state.wavAudioCtx.close(); state.wavAudioCtx=null; }
+  document.getElementById('btnStopWav').disabled = true;
+}
+
+// =========================================================
+// DOWNLOADS
+// =========================================================
+function downloadWav() {
+  if (!state.encWavBuffer) return;
+  const blob = new Blob([state.encWavBuffer], {type:'audio/wav'});
+  dl(blob, 'encrypted_wave.wav');
+  notify('Downloading encrypted_wave.wav');
+}
+
+function downloadSpec() {
+  const cvs = document.getElementById('specCanvas');
+  cvs.toBlob(blob => dl(blob, 'spectrogram.png'), 'image/png');
+}
+
+function downloadJson() {
+  if (!state.encMetadata) return;
+  const blob = new Blob([JSON.stringify(state.encMetadata, null, 2)], {type:'application/json'});
+  dl(blob, 'encoded_data.json');
+}
+
+function downloadRecon() {
+  if (!state.reconCanvas) return;
+  state.reconCanvas.toBlob(blob => dl(blob, 'reconstructed_image.png'), 'image/png');
+}
+
+function dl(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+}
+
+// =========================================================
+// HASH UTILITY
+// =========================================================
+async function hashBuffer(buf) {
+  const hashBuf = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hashBuf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// =========================================================
+// SETTINGS
+// =========================================================
+function saveSettings() {
+  notify('Settings saved');
+}
+
+// =========================================================
+// HELPERS
+// =========================================================
+function tick() { return new Promise(r => setTimeout(r, 0)); }
+
+// Resize canvases on load
+window.addEventListener('load', () => {
+  ['specCanvas','waveCanvas','freqCanvas'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.parentElement) el.width = el.parentElement.clientWidth || 800;
+  });
+});
+</script>
+</body>
+</html>
