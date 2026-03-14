@@ -1,3 +1,5 @@
+<img src="https://i.ibb.co/20PjLYp2/image.png" alt="image" border="0">
+
 Spectral Cipher is an experimental web application that converts images into spectral wave patterns (similar to spectrogram signals) and allows them to be reconstructed back into their original form. The project explores the concept of encoding visual data into frequency-based representations, creating a unique approach to data transformation and encryption-like techniques.
 
 Overview
